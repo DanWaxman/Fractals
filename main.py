@@ -3,6 +3,7 @@ import multiprocessing as mp
 import numpy as np
 from PIL import Image
 import tqdm
+import cv2 as cv
 
 class Mandelbrot:
     def __init__(self, height, width, max_it=1000, escape_z=4):
@@ -111,8 +112,8 @@ class Buddhabrot:
         with mp.Pool(12) as p:
             for partial_result in tqdm.tqdm(p.imap_unordered(self.thread_generate, iter([self.points // 100] * 100)), total=100):
                 self.image_data = self.image_data + partial_result
-        # TODO: Do some denoising
-        self.image_data = self.image_data / np.amax(self.image_data, axis=(0,1)) * 255
+        self.image_data = (self.image_data / np.amax(self.image_data, axis=(0,1)) * 255).astype(np.uint8)
+        self.image_data = cv.fastNlMeansDenoisingColored(self.image_data, None)
 
     def get_image(self):
         return Image.fromarray(self.image_data.astype(np.uint8), 'RGB')
@@ -121,12 +122,8 @@ class Buddhabrot:
         return self.image_data
 
 if __name__ == '__main__':
-    '''red_img = Buddhabrot(500, 673, max_it=(5000,500,50), points=10000000)
+    red_img = Buddhabrot(500, 673, max_it=(5000,500,50), points=10**7)
     red_img.generate_image()
     img = red_img.get_image()
-    img.show()'''
-    mb = Mandelbrot(2286,4000,max_it=1000)
-    mb.generate_image()
-    img = mb.get_image()
     img.show()
 
