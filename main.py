@@ -17,7 +17,7 @@ class Mandelbrot:
         z = 0 + 0j
         for i in range(self.max_it):
             z = z ** 2 + c
-            if np.abs(z) > self.escape_z:
+            if z.real*z.real+z.imag*z.imag > self.escape_z:
                 return False
 
         return True
@@ -28,14 +28,28 @@ class Mandelbrot:
 
         return a + b * 1j
 
-    def generate_image(self):
-        for i in range(self.width):
+    def thread_generate(self, bounds):
+        i_min, i_max = bounds
+        tmp = np.zeros((self.height, i_max-i_min, 3), dtype=np.uint8)
+
+        for i in range(i_min, i_max):
             for j in range(self.height):
-                if i % 100 == 0 and j == 0:
-                    print(i)
                 c = self.index2c(i, j)
                 result = 255 if self.iterate_point(c) else 0
-                self.image_data[j, i] = result
+                tmp[j, i - i_min] = result
+
+        return (i_min, i_max, tmp)
+
+    def generate_image(self):
+        with mp.Pool(12) as p:
+            n_jobs = 100
+            i_mins = [i * self.width//n_jobs for i in range(n_jobs)]
+            i_maxs = [(i+1) * self.width//n_jobs for i in range(n_jobs)]
+            args = zip(i_mins, i_maxs)
+            for partial_result in tqdm.tqdm(p.imap_unordered(self.thread_generate, args), total=n_jobs):
+                i_min, i_max, arr = partial_result
+                self.image_data[:,i_min:i_max,:] = arr
+
 
     def get_image(self):
         return Image.fromarray(self.image_data, 'RGB')
@@ -80,6 +94,7 @@ class Buddhabrot:
     def thread_generate(self, points):
         tmp = np.zeros((self.height, self.width, 3), dtype=np.float64)
         for n in range(points):
+            # TODO: Do some smarter sampling
             rand_c = random.uniform(*self.x_bounds) + random.uniform(*self.y_bounds) * 1j
 
             result = self.iterate_point(rand_c)
@@ -96,6 +111,7 @@ class Buddhabrot:
         with mp.Pool(12) as p:
             for partial_result in tqdm.tqdm(p.imap_unordered(self.thread_generate, iter([self.points // 100] * 100)), total=100):
                 self.image_data = self.image_data + partial_result
+        # TODO: Do some denoising
         self.image_data = self.image_data / np.amax(self.image_data, axis=(0,1)) * 255
 
     def get_image(self):
@@ -105,7 +121,12 @@ class Buddhabrot:
         return self.image_data
 
 if __name__ == '__main__':
-    red_img = Buddhabrot(500, 673, max_it=(5000,500,50), points=10000000)
+    '''red_img = Buddhabrot(500, 673, max_it=(5000,500,50), points=10000000)
     red_img.generate_image()
     img = red_img.get_image()
+    img.show()'''
+    mb = Mandelbrot(2286,4000,max_it=1000)
+    mb.generate_image()
+    img = mb.get_image()
     img.show()
+
