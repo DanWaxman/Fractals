@@ -2,7 +2,7 @@ import random
 import multiprocessing as mp
 import numpy as np
 from PIL import Image
-
+import tqdm
 
 class Mandelbrot:
     def __init__(self, height, width, max_it=1000, escape_z=4):
@@ -94,7 +94,8 @@ class Buddhabrot:
 
     def generate_image(self):
         with mp.Pool(12) as p:
-            self.image_data = np.sum(p.map(self.thread_generate, iter([self.points // 12] * 12)), axis=0)
+            for partial_result in tqdm.tqdm(p.imap_unordered(self.thread_generate, iter([self.points // 100] * 100)), total=100):
+                self.image_data = self.image_data + partial_result
         self.image_data = self.image_data / np.amax(self.image_data, axis=(0,1)) * 255
 
     def get_image(self):
