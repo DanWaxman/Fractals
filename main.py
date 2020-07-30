@@ -1,9 +1,11 @@
-import random
 import multiprocessing as mp
-import numpy as np
-from PIL import Image
-import tqdm
+import random
+
 import cv2 as cv
+import numpy as np
+import tqdm
+from PIL import Image
+
 
 class Mandelbrot:
     def __init__(self, height, width, max_it=1000, escape_z=4):
@@ -18,7 +20,7 @@ class Mandelbrot:
         z = 0 + 0j
         for i in range(self.max_it):
             z = z ** 2 + c
-            if z.real*z.real+z.imag*z.imag > self.escape_z:
+            if z.real * z.real + z.imag * z.imag > self.escape_z:
                 return False
 
         return True
@@ -31,7 +33,7 @@ class Mandelbrot:
 
     def thread_generate(self, bounds):
         i_min, i_max = bounds
-        tmp = np.zeros((self.height, i_max-i_min, 3), dtype=np.uint8)
+        tmp = np.zeros((self.height, i_max - i_min, 3), dtype=np.uint8)
 
         for i in range(i_min, i_max):
             for j in range(self.height):
@@ -44,24 +46,24 @@ class Mandelbrot:
     def generate_image(self):
         with mp.Pool(12) as p:
             n_jobs = 100
-            i_mins = [i * self.width//n_jobs for i in range(n_jobs)]
-            i_maxs = [(i+1) * self.width//n_jobs for i in range(n_jobs)]
+            i_mins = [i * self.width // n_jobs for i in range(n_jobs)]
+            i_maxs = [(i + 1) * self.width // n_jobs for i in range(n_jobs)]
             args = zip(i_mins, i_maxs)
             for partial_result in tqdm.tqdm(p.imap_unordered(self.thread_generate, args), total=n_jobs):
                 i_min, i_max, arr = partial_result
-                self.image_data[:,i_min:i_max,:] = arr
-
+                self.image_data[:, i_min:i_max, :] = arr
 
     def get_image(self):
         return Image.fromarray(self.image_data, 'RGB')
 
 
 class Buddhabrot:
-    def __init__(self, height, width, points=10000, max_it=(1000,1000,1000), x_bounds=(-2,1.5), y_bounds=(-1.3,1.3)):
-        self.height=height
-        self.width=width
-        self.points=points
-        self.max_it=max_it
+    def __init__(self, height, width, points=10000, max_it=(1000, 1000, 1000), x_bounds=(-2, 1.5),
+                 y_bounds=(-1.3, 1.3)):
+        self.height = height
+        self.width = width
+        self.points = points
+        self.max_it = max_it
         self.x_bounds = x_bounds
         self.y_bounds = y_bounds
 
@@ -78,7 +80,7 @@ class Buddhabrot:
         z = 0 + 0j
 
         for i in range(max(self.max_it)):
-            z = z**2 + c
+            z = z ** 2 + c
             if i < self.max_it[0]:
                 trace[0].append(z)
             if i < self.max_it[1]:
@@ -86,11 +88,10 @@ class Buddhabrot:
             if i < self.max_it[2]:
                 trace[2].append(z)
 
-            if z.real*z.real + z.imag*z.imag > 4.0:
+            if z.real * z.real + z.imag * z.imag > 4.0:
                 return trace
 
         return []
-
 
     def thread_generate(self, points):
         tmp = np.zeros((self.height, self.width, 3), dtype=np.float64)
@@ -110,9 +111,11 @@ class Buddhabrot:
 
     def generate_image(self):
         with mp.Pool(12) as p:
-            for partial_result in tqdm.tqdm(p.imap_unordered(self.thread_generate, iter([self.points // 100] * 100)), total=100):
+            n_jobs = self.points // 10 ** 4
+            for partial_result in tqdm.tqdm(
+                    p.imap_unordered(self.thread_generate, iter([self.points // n_jobs] * n_jobs)), total=n_jobs):
                 self.image_data = self.image_data + partial_result
-        self.image_data = (self.image_data / np.amax(self.image_data, axis=(0,1)) * 255).astype(np.uint8)
+        self.image_data = ((self.image_data / np.amax(self.image_data, axis=(0, 1))) * 255).astype(np.uint8)
         self.image_data = cv.fastNlMeansDenoisingColored(self.image_data, None)
 
     def get_image(self):
@@ -121,9 +124,9 @@ class Buddhabrot:
     def get_image_array(self):
         return self.image_data
 
+
 if __name__ == '__main__':
-    red_img = Buddhabrot(500, 673, max_it=(5000,500,50), points=10**7)
+    red_img = Buddhabrot(500, 673, max_it=(5000, 500, 50), points=10 ** 8)
     red_img.generate_image()
     img = red_img.get_image()
     img.show()
-
