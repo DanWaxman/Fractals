@@ -42,7 +42,7 @@ class Mandelbrot:
 
 
 class Buddhabrot:
-    def __init__(self, height, width, points=10000, max_it=1000, x_bounds=(-2,1.5), y_bounds=(-1.3,1.3)):
+    def __init__(self, height, width, points=10000, max_it=(1000,1000,1000), x_bounds=(-2,1.5), y_bounds=(-1.3,1.3)):
         self.height=height
         self.width=width
         self.points=points
@@ -59,12 +59,18 @@ class Buddhabrot:
         return (x, y)
 
     def iterate_point(self, c):
-        trace = []
+        trace = [[], [], []]
         z = 0 + 0j
 
-        for i in range(self.max_it):
+        for i in range(max(self.max_it)):
             z = z**2 + c
-            trace.append(z)
+            if i < self.max_it[0]:
+                trace[0].append(z)
+            if i < self.max_it[1]:
+                trace[1].append(z)
+            if i < self.max_it[2]:
+                trace[2].append(z)
+
             if z.real*z.real + z.imag*z.imag > 4.0:
                 return trace
 
@@ -77,18 +83,19 @@ class Buddhabrot:
             rand_c = random.uniform(*self.x_bounds) + random.uniform(*self.y_bounds) * 1j
 
             result = self.iterate_point(rand_c)
-            for trace_z in result:
-                x, y = self.c2index(trace_z)
+            for j, triplet in enumerate(result):
+                for trace_z in triplet:
+                    x, y = self.c2index(trace_z)
 
-                if 0 <= x < self.width and 0 <= y < self.height:
-                    tmp[y, x] = tmp[y, x] + 1
+                    if 0 <= x < self.width and 0 <= y < self.height:
+                        tmp[y, x, j] = tmp[y, x, j] + 1
 
         return tmp
 
     def generate_image(self):
-        pool = mp.Pool(12)
-        self.image_data = np.sum(pool.map(self.thread_generate, iter([self.points // 12] * 12)), axis=0)
-        self.image_data = self.image_data / np.max(self.image_data) * 255
+        with mp.Pool(12) as p:
+            self.image_data = np.sum(p.map(self.thread_generate, iter([self.points // 12] * 12)), axis=0)
+        self.image_data = self.image_data / np.amax(self.image_data, axis=(0,1)) * 255
 
     def get_image(self):
         return Image.fromarray(self.image_data.astype(np.uint8), 'RGB')
@@ -97,18 +104,7 @@ class Buddhabrot:
         return self.image_data
 
 if __name__ == '__main__':
-    red_img = Buddhabrot(500, 673, max_it=100, points=10000000)
+    red_img = Buddhabrot(500, 673, max_it=(5000,500,50), points=10000000)
     red_img.generate_image()
-    red_img_array = red_img.get_image_array()
-
-    green_img = Buddhabrot(500, 673, max_it=50, points=10000000)
-    green_img.generate_image()
-    green_img_array = green_img.get_image_array()
-
-    blue_img = Buddhabrot(500, 673, max_it=100, points=10000000)
-    blue_img.generate_image()
-    blue_img_array = blue_img.get_image_array()
-
-    img_array = np.stack([red_img_array[:,:,0], green_img_array[:,:,0], blue_img_array[:,:,0]], axis=2)
-    img = Image.fromarray(img_array.astype(np.uint8), 'RGB')
+    img = red_img.get_image()
     img.show()
