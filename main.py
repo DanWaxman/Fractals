@@ -59,6 +59,12 @@ class Mandelbrot:
         return Image.fromarray(self.image_data, 'RGB')
 
 
+def in_bulb(z):
+    cr = z.real*z.real + z.imag*z.imag
+    ci = np.sqrt(cr - z.real/2 + 0.0625)
+    return (16 * cr * ci) < (5 * ci - 4 * z.real + 1)
+
+
 class Buddhabrot:
     def __init__(self, height, width, points=10000, max_it=(1000, 1000, 1000), x_bounds=(-2, 1.5),
                  y_bounds=(-1.3, 1.3)):
@@ -79,10 +85,14 @@ class Buddhabrot:
 
     def iterate_point(self, c):
         trace = [[], [], []]
-        z = 0 + 0j
+        z = c
+
+        if in_bulb(z):
+                return []
 
         for i in range(max(self.max_it)):
             z = z ** 2 + c
+
             if i < self.max_it[0]:
                 trace[0].append(z)
             if i < self.max_it[1]:
@@ -99,15 +109,17 @@ class Buddhabrot:
         tmp = np.zeros((self.height, self.width, 3), dtype=np.float64)
         for n in range(points):
             # TODO: Do some smarter sampling
-            rand_c = random.uniform(*self.x_bounds) + random.uniform(*self.y_bounds) * 1j
+            rand_c = random.uniform(-2, 2) + random.uniform(-2, 2) * 1j
 
             result = self.iterate_point(rand_c)
             for j, triplet in enumerate(result):
                 for trace_z in triplet:
                     x, y = self.c2index(trace_z)
+                    _, yp = self.c2index(trace_z.conjugate())
 
-                    if 0 <= x < self.width and 0 <= y < self.height:
+                    if 0 <= x < self.width and 0 <= y < self.height and 0 <= yp < self.height:
                         tmp[y, x, j] = tmp[y, x, j] + 1
+                        tmp[yp, x, j] = tmp[yp, x, j] + 1
 
         return tmp
 
@@ -118,7 +130,7 @@ class Buddhabrot:
                     p.imap_unordered(self.thread_generate, iter([self.points // n_jobs] * n_jobs)), total=n_jobs):
                 self.image_data = self.image_data + partial_result
         self.image_data = ((self.image_data / np.amax(self.image_data, axis=(0, 1))) * 255).astype(np.uint8)
-        self.image_data = cv.fastNlMeansDenoisingColored(self.image_data, None)
+        self.image_data = cv.fastNlMeansDenoisingColored(self.image_data, None, h=1, hColor=1)
 
     def get_image(self):
         return Image.fromarray(self.image_data.astype(np.uint8), 'RGB')
@@ -181,9 +193,7 @@ class JuliaSet:
 
 
 if __name__ == '__main__':
-    for i in tqdm.trange(350):
-        c = 0.7885 * cmath.exp(1j * i / 350 * 2 * cmath.pi)
-        current_set = JuliaSet(500, 500, max_it=81, c=c, verbose=False)
-        current_set.generate_image()
-        img = current_set.get_image().convert('RGB')
-        img.save(f'/home/danwaxman/devel/Fractals/JuliaGif/julia_{i:03d}.png')
+    buddhabrot = Buddhabrot(1000, 1000, x_bounds=(-2,2), y_bounds=(-2,2), max_it=(5000,500,50), points=10**8)
+    buddhabrot.generate_image()
+    img = buddhabrot.get_image()
+    img.show()
