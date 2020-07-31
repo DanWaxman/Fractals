@@ -6,6 +6,8 @@ import numpy as np
 import tqdm
 from PIL import Image
 
+import cmath
+
 
 class Mandelbrot:
     def __init__(self, height, width, max_it=1000, escape_z=4):
@@ -125,8 +127,63 @@ class Buddhabrot:
         return self.image_data
 
 
+class JuliaSet:
+    def __init__(self, height, width, max_it=1000, escape_z=4, c=0.618 + 0.2j, verbose=True):
+        self.height = height
+        self.width = width
+        self.max_it = max_it
+        self.escape_z = escape_z
+        self.c = c
+        self.verbose = verbose
+
+        self.image_data = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+
+    def iterate_point(self, z_0):
+        z = z_0
+        for i in range(self.max_it):
+            z = z ** 2 + self.c
+            if z.real * z.real + z.imag * z.imag > self.escape_z:
+                return [i / self.max_it * 255, 255, 255]
+
+        return [255, 255, 0]
+
+    def index2c(self, x, y):
+        a = x / (self.width / 4) - 2
+        b = y / (self.height / 4) - 2
+
+        return a + b * 1j
+
+    def thread_generate(self, bounds):
+        i_min, i_max = bounds
+        tmp = np.zeros((self.height, i_max - i_min, 3), dtype=np.uint8)
+
+        for i in range(i_min, i_max):
+            for j in range(self.height):
+                c = self.index2c(i, j)
+                result = self.iterate_point(c)
+                tmp[j, i - i_min] = result
+
+        return (i_min, i_max, tmp)
+
+    def generate_image(self):
+        with mp.Pool(12) as p:
+            n_jobs = 100
+            i_mins = [i * self.width // n_jobs for i in range(n_jobs)]
+            i_maxs = [(i + 1) * self.width // n_jobs for i in range(n_jobs)]
+            args = zip(i_mins, i_maxs)
+            for partial_result in tqdm.tqdm(p.imap_unordered(self.thread_generate, args), total=n_jobs,
+                                            disable=not self.verbose):
+                i_min, i_max, arr = partial_result
+                self.image_data[:, i_min:i_max, :] = arr
+
+    def get_image(self):
+        return Image.fromarray(self.image_data, 'HSV')
+
+
 if __name__ == '__main__':
-    red_img = Buddhabrot(500, 673, max_it=(5000, 500, 50), points=10 ** 8)
-    red_img.generate_image()
-    img = red_img.get_image()
-    img.show()
+    for i in tqdm.trange(350):
+        c = 0.7885 * cmath.exp(1j * i / 350 * 2 * cmath.pi)
+        current_set = JuliaSet(500, 500, max_it=81, c=c, verbose=False)
+        current_set.generate_image()
+        img = current_set.get_image().convert('RGB')
+        img.save(f'/home/danwaxman/devel/Fractals/JuliaGif/julia_{i:03d}.png')
